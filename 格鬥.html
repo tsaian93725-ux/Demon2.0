@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Side-Scroller Fighting Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; margin: 0 auto; border: 1px solid #fff; }
+        #hud { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="hud">
+        <div>Player HP: <span id="playerHP">100</span>/ <span id="playerMaxHP">100</span></div>
+        <div>Killed Enemies: <span id="killedEnemies">0</span></div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
+
+        // Game constants
+        const GRAVITY = 0.5;
+        const JUMP_POWER = -12;
+        const BASE_MOVE_SPEED = 1;
+        let ENEMY_SPEED = 0.5;
+        let ENEMY_DAMAGE = 10;
+        const ATTACK_DAMAGE = 20;
+        const SWORD_DAMAGE = 30;
+        const DART_DAMAGE = 15;
+        const RASENGAN_DAMAGE = 50;
+        const RASENGAN_EXPLOSION_DAMAGE = 60;
+        const KILL_MAGIC_DAMAGE = 40;
+        const DUAL_SWORD_DAMAGE = 70;
+        const BULLET_DAMAGE = 30;
+        const NUCLEAR_DAMAGE = 100;
+        const SUMMON_DAMAGE = 10;
+        const ENEMY_HP = 30;
+        let BOSS_HP = 300; // Elevated
+        const RED_BOSS_DAMAGE = 35;
+        const BLUE_BOSS_DASH_DAMAGE = 15;
+        const YELLOW_BOSS_FIRE_DAMAGE = 25;
+        const BLACK_BOSS_DAMAGE = 3;
+        const GREEN_BOSS_MAGIC_DAMAGE = 1;
+        const WHITE_BOSS_DAMAGE = 5;
+        const PURPLE_BOSS_BOMB_DAMAGE = 15;
+        const HEAL_AMOUNT = 20;
+        const AOE_RANGE = 100;
+        const HEART_BOOST = 20;
+        const INVINCIBLE_TIME = 60; // 1 second
+        const STUN_TIME = 60; // 1 second
+        const BASE_ATTACK_COOLDOWN = 30;
+        const SWORD_ATTACK_COOLDOWN = 15;
+        const SHOES_SPEED_BOOST = 0.3;
+        const MAX_SHOES = 20;
+        const RASENGAN_COOLDOWN = 300;
+        const BARRIER_COOLDOWN = 1200;
+        const BARRIER_DURATION = 600;
+        const KILL_MAGIC_DURATION = 600;
+        const KILL_MAGIC_COOLDOWN = 600;
+        const FLY_MAGIC_DURATION = 300;
+        const FLY_MAGIC_COOLDOWN = 600;
+        const BOSS_MAGIC_COOLDOWN = 120;
+        const BLUE_BOSS_DASH_COOLDOWN = 180;
+        const BLUE_BOSS_DASH_SPEED = 8;
+        const YELLOW_BOSS_FIRE_COOLDOWN = 120;
+        const BLACK_BOSS_COLOR_CHANGE = 120;
+        const BLACK_BOSS_SPEED = 1.1;
+        const WHITE_BOSS_SPEED = 0.3;
+        const PURPLE_BOSS_FLY_HEIGHT = 100;
+        const MAGICIAN_SUMMON_COUNT = 20;
+        const PLATFORM_REFRESH_INTERVAL = 1800;
+        const BOSS_SPAWN_INTERVAL = 900;
+        const DUAL_SWORD_RANGE = 150;
+        const WHITE_BOSS_LIFETIME = 2400; // 40 seconds
+        const WHITE_BOSS_INVINCIBLE_TIME = 1800; // 30 seconds
+        const WHITE_BOSS_PAUSE_INTERVAL = 300; // 5 seconds
+        const WHITE_BOSS_PAUSE_DURATION = 120; // 2 seconds
+        const WAVE_INTERVAL = 10; // Every 10 kills
+        const PURPLE_BOSS_BOMB_INTERVAL = 120; // 2 seconds
+        const PISTOL_COOLDOWN = 60; // 1 second
+        const NUCLEAR_COOLDOWN = 180; // 3 seconds
+        const NUCLEAR_DURATION = 300; // 5 seconds
+        const SUMMON_COOLDOWN = 600; // 10 seconds
+        const SUMMON_DURATION = 300; // 5 seconds
+        const ORANGE_BOSS_PAUSE_DURATION = 180; // 3 seconds
+        const ORANGE_BOSS_SPAWN_DELAY = 300; // 5 seconds
+        const PURPLE_BOSS_FALL_TIME = 1200; // 20 seconds
+
+        // Player object
+        let player = {
+            x: WIDTH / 2,
+            y: HEIGHT - 70,
+            width: 20,
+            height: 50,
+            vx: 0,
+            vy: 0,
+            jumping: false,
+            sliding: false,
+            attacking: false,
+            attackCooldown: 0,
+            attackCooldownMax: BASE_ATTACK_COOLDOWN,
+            defending: false,
+            swordCount: 0,
+            pistolCount: 0,
+            attackRange: AOE_RANGE,
+            hasRasengan: false,
+            rasenganCooldown: 0,
+            hasBarrier: false,
+            barrierCooldown: 0,
+            shoeCount: 0,
+            hasKillMagic: false,
+            killMagicTimer: 0,
+            hasFlyMagic: false,
+            flyTimer: 0,
+            flying: false,
+            hasSummonMagic: false,
+            summonCooldown: 0,
+            pistolCooldown: 0,
+            nuclearCooldown: 0,
+            throwingDart: false,
+            hp: 100,
+            maxHP: 100,
+            moveSpeed: BASE_MOVE_SPEED,
+            direction: 'right',
+            pickupCooldown: 0,
+            invincibleTimer: 0,
+            onPlatform: false,
+            pauseTimer: 0
+        };
+
+        // Platforms
+        let platforms = [];
+
+        // Power-ups
+        let powerups = [];
+
+        // Initial sword
+        powerups.push({
+            x: WIDTH / 2 + 50,
+            y: HEIGHT - 30,
+            width: 40,
+            height: 20,
+            type: 'sword',
+            picked: false
+        });
+
+        // Enemies
+        let enemies = [];
+
+        // Bosses
+        let bosses = [];
+
+        // Soldiers (summoned)
+        let soldiers = [];
+
+        // Projectiles
+        let darts = [];
+        let rasengans = [];
+        let bossProjectiles = [];
+        let flames = [];
+        let swordWaves = [];
+        let bombs = [];
+        let bullets = [];
+        let nuclears = [];
+
+        // Killed enemies
+        let killedEnemies = 0;
+
+        // Timers
+        let platformTimer = 0;
+        let bossSpawnTimer = 0;
+
+        // Keyboard
+        const keys = {};
+        window.addEventListener('keydown', (e) => { keys[e.key.toUpperCase()] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key.toUpperCase()] = false; });
+
+        // Draw stickman
+        function drawStickman(x, y, direction, color = '#fff', size = 1, hat = false) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 * size;
+            ctx.beginPath();
+            ctx.arc(x, y - 20 * size, 10 * size, 0, Math.PI * 2);
+            ctx.stroke();
+            if (hat) {
+                ctx.fillStyle = color;
+                ctx.fillRect(x - 12 * size, y - 30 * size, 24 * size, 10 * size);
+            }
+            ctx.beginPath();
+            ctx.moveTo(x, y - 10 * size);
+            ctx.lineTo(x, y + 10 * size);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y - 5 * size);
+            if (direction === 'right') {
+                ctx.lineTo(x + 15 * size, y + 5 * size);
+                ctx.moveTo(x, y - 5 * size);
+                ctx.lineTo(x - 15 * size, y + 5 * size);
+            } else {
+                ctx.lineTo(x - 15 * size, y + 5 * size);
+                ctx.moveTo(x, y - 5 * size);
+                ctx.lineTo(x + 15 * size, y + 5 * size);
+            }
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10 * size);
+            ctx.lineTo(x - 10 * size, y + 30 * size);
+            ctx.moveTo(x, y + 10 * size);
+            ctx.lineTo(x + 10 * size, y + 30 * size);
+            ctx.stroke();
+        }
+
+        // Draw sword
+        function drawSword(x, y) {
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(x, y, 30, 5);
+            ctx.fillRect(x - 5, y + 2.5, 10, 5);
+        }
+
+        // Draw heart
+        function drawHeart(x, y) {
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.moveTo(x, y + 5);
+            ctx.bezierCurveTo(x - 10, y - 5, x - 20, y + 10, x, y + 25);
+            ctx.bezierCurveTo(x + 20, y + 10, x + 10, y - 5, x, y + 5);
+            ctx.fill();
+        }
+
+        // Draw rasengan powerup
+        function drawRasenganPowerup(x, y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(x + 20, y, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw barrier powerup
+        function drawBarrierPowerup(x, y) {
+            ctx.fillStyle = '#0ff';
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y - 10);
+            ctx.lineTo(x + 10, y + 10);
+            ctx.lineTo(x + 30, y + 10);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw shoes
+        function drawShoes(x, y) {
+            ctx.fillStyle = '#ff0';
+            ctx.fillRect(x + 5, y + 5, 30, 10);
+            ctx.fillRect(x + 10, y, 10, 5);
+        }
+
+        // Draw kill magic powerup
+        function drawKillMagicPowerup(x, y) {
+            ctx.fillStyle = '#f80';
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y + 20);
+            ctx.lineTo(x + 10, y);
+            ctx.lineTo(x + 30, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw fly magic powerup (wing icon)
+        function drawFlyMagicPowerup(x, y) {
+            ctx.fillStyle = '#0f0';
+            ctx.beginPath();
+            ctx.moveTo(x + 10, y + 10);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x + 20, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw summon powerup (soldier icon)
+        function drawSummonPowerup(x, y) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x + 15, y, 10, 20);
+        }
+
+        // Draw pistol
+        function drawPistol(x, y) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x, y, 20, 5);
+            ctx.fillRect(x + 5, y - 5, 10, 5);
+        }
+
+        // Draw dart
+        function drawDart(x, y, direction) {
+            ctx.fillStyle = '#ff0';
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            if (direction === 'right') {
+                ctx.lineTo(x + 10, y - 5);
+                ctx.lineTo(x + 10, y + 5);
+            } else {
+                ctx.lineTo(x - 10, y - 5);
+                ctx.lineTo(x - 10, y + 5);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw rasengan
+        function drawRasengan(x, y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw boss magic
+        function drawBossMagic(x, y) {
+            ctx.fillStyle = '#0f0';
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw flame
+        function drawFlame(x, y, color = '#f00') {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x, y + 20);
+            ctx.lineTo(x - 10, y);
+            ctx.lineTo(x + 10, y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ff0';
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10);
+            ctx.lineTo(x - 5, y - 5);
+            ctx.lineTo(x + 5, y - 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw sword wave
+        function drawSwordWave(x, y) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.ellipse(x, y, 50, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw platform
+        function drawPlatform(x, y, width, height) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x, y, width, height);
+        }
+
+        // Draw bomb
+        function drawBomb(x, y) {
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw bullet
+        function drawBullet(x, y) {
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw nuclear
+        function drawNuclear(x, y) {
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x, y, 50, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Spawn platforms
+        function spawnPlatforms() {
+            platforms = [];
+            for (let i = 0; i < 5; i++) {
+                platforms.push({
+                    x: Math.random() * (WIDTH - 100) + 50,
+                    y: Math.random() * (HEIGHT - 100) + 50,
+                    width: 60,
+                    height: 10
+                });
+            }
+        }
+
+        // Spawn enemy
+        function spawnEnemy(side = null) {
+            if (!side) side = Math.random() < 0.5 ? 'left' : 'right';
+            let x = side === 'left' ? -20 : WIDTH + 20;
+            let y = HEIGHT - 70;
+            if (Math.random() < 0.1) { // 10% chance from top
+                side = 'top';
+                x = Math.random() * WIDTH;
+                y = -50;
+            } else if (Math.random() < 0.1) { // 10% from bottom, but since ground, perhaps from sides
+                side = 'bottom';
+                x = Math.random() * WIDTH;
+                y = HEIGHT + 50;
+            }
+            enemies.push({
+                x: x,
+                y: y,
+                width: 20,
+                height: 50,
+                vx: side === 'left' ? ENEMY_SPEED : (side === 'right' ? -ENEMY_SPEED : 0),
+                vy: side === 'top' ? ENEMY_SPEED : (side === 'bottom' ? -ENEMY_SPEED : 0),
+                hp: ENEMY_HP,
+                attacking: false,
+                direction: 'right',
+                color: '#f00',
+                stunTimer: 0
+            });
+        }
+
+        // Spawn boss
+        function spawnBoss(type = null) {
+            const side = Math.random() < 0.5 ? 'left' : 'right';
+            const x = side === 'left' ? -40 : WIDTH + 40;
+            if (!type) {
+                const types = ['green', 'blue', 'yellow', 'black', 'magician', 'purple', 'white', 'red', 'orange'];
+                type = types[Math.floor(Math.random() * types.length)];
+            }
+            let color, speed, damage, y = HEIGHT - 90, flying = false, hat = false, colorTimer = 0;
+            let props = {};
+            switch (type) {
+                case 'green':
+                    color = '#090';
+                    speed = ENEMY_SPEED * 0.8;
+                    damage = RED_BOSS_DAMAGE;
+                    props.magicCooldown = BOSS_MAGIC_COOLDOWN;
+                    break;
+                case 'blue':
+                    color = '#00f';
+                    speed = 0.2;
+                    damage = 15;
+                    props.dashCooldown = BLUE_BOSS_DASH_COOLDOWN;
+                    props.dashing = false;
+                    break;
+                case 'yellow':
+                    color = '#ff0';
+                    speed = 0.1;
+                    damage = RED_BOSS_DAMAGE;
+                    y = 0; // From sky
+                    flying = true;
+                    props.fireCooldown = YELLOW_BOSS_FIRE_COOLDOWN;
+                    break;
+                case 'black':
+                    color = '#000';
+                    speed = BLACK_BOSS_SPEED;
+                    damage = BLACK_BOSS_DAMAGE;
+                    props.jumpCooldown = BLACK_BOSS_COLOR_CHANGE;
+                    props.colorTimer = BLACK_BOSS_COLOR_CHANGE;
+                    props.jumping = false;
+                    props.vy = 0;
+                    break;
+                case 'magician':
+                    color = '#900';
+                    speed = ENEMY_SPEED * 0.5;
+                    damage = RED_BOSS_DAMAGE;
+                    hat = true;
+                    props.summoned = false;
+                    break;
+                case 'purple':
+                    color = '#90f';
+                    speed = ENEMY_SPEED;
+                    damage = RED_BOSS_DAMAGE;
+                    flying = true;
+                    y = PURPLE_BOSS_FLY_HEIGHT;
+                    props.vy = 0;
+                    props.bombCooldown = PURPLE_BOSS_BOMB_INTERVAL;
+                    props.fallTimer = PURPLE_BOSS_FALL_TIME;
+                    break;
+                case 'white':
+                    color = '#fff';
+                    speed = WHITE_BOSS_SPEED;
+                    damage = WHITE_BOSS_DAMAGE;
+                    props.attackCooldown = 0;
+                    props.dartCooldown = 0;
+                    props.rasenganCooldown = 0;
+                    props.killMagicTimer = 0;
+                    props.flyTimer = 0;
+                    props.flying = false;
+                    props.lifetime = WHITE_BOSS_LIFETIME;
+                    props.invincibleTimer = WHITE_BOSS_INVINCIBLE_TIME;
+                    props.pauseCooldown = WHITE_BOSS_PAUSE_INTERVAL;
+                    break;
+                case 'orange':
+                    color = '#f80';
+                    speed = ENEMY_SPEED * 0.8;
+                    damage = RED_BOSS_DAMAGE;
+                    props.paused = false;
+                    props.spawnWhiteTimer = 0;
+                    break;
+                default:
+                    color = '#900';
+                    speed = ENEMY_SPEED * 0.8;
+                    damage = RED_BOSS_DAMAGE;
+                    break;
+            }
+            const newBoss = {
+                x: x,
+                y: y,
+                width: 40,
+                height: 70,
+                vx: side === 'left' ? speed : -speed,
+                hp: BOSS_HP,
+                attacking: false,
+                direction: side === 'left' ? 'right' : 'left',
+                type: type,
+                color: color,
+                damage: damage,
+                speed: speed,
+                frozenTimer: 0,
+                flying: flying,
+                hat: hat,
+                vy: 0,
+                ...props
+            };
+            bosses.push(newBoss);
+            if (type === 'yellow') {
+                const numYellow = 5;
+                for (let k = 1; k < numYellow; k++) {
+                    let extraSide = Math.random() < 0.25 ? 'left' : (Math.random() < 0.5 ? 'right' : (Math.random() < 0.75 ? 'top' : 'bottom'));
+                    let extraX = extraSide === 'left' ? -40 : (extraSide === 'right' ? WIDTH + 40 : Math.random() * WIDTH);
+                    let extraY = extraSide === 'top' ? -40 : (extraSide === 'bottom' ? HEIGHT + 40 : HEIGHT - 90);
+                    const extraBoss = {...newBoss, x: extraX, y: extraY, vx: extraSide === 'left' ? speed : (extraSide === 'right' ? -speed : 0), vy: extraSide === 'top' ? speed : (extraSide === 'bottom' ? -speed : 0)};
+                    bosses.push(extraBoss);
+                }
+            } else if (type === 'white') {
+                newBoss.x = -40; // From left
+            }
+        }
+
+        // Spawn reward
+        function spawnReward() {
+            const rand = Math.random();
+            let type;
+            if (rand < 0.125) type = 'sword';
+            else if (rand < 0.25) type = 'heart';
+            else if (rand < 0.375) type = 'rasengan';
+            else if (rand < 0.5) type = 'barrier';
+            else if (rand < 0.625) type = 'shoes';
+            else if (rand < 0.75) type = 'killmagic';
+            else if (rand < 0.875) type = 'flymagic';
+            else if (rand < 0.9375) type = 'summon';
+            else type = 'pistol';
+            const x = Math.random() * (WIDTH - 50) + 25;
+            const y = HEIGHT - 30;
+            powerups.push({
+                x: x,
+                y: y,
+                width: 40,
+                height: 20,
+                type: type,
+                picked: false
+            });
+        }
+
+        // Collision
+        function collides(a, b) {
+            const buffer = 10;
+            return a.x - buffer < b.x + b.width && a.x + a.width + buffer > b.x &&
+                   a.y - buffer < b.y + b.height && a.y + a.height + buffer > b.y;
+        }
+
+        // Distance
+        function distance(a, b) {
+            return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+        }
+
+        // Update wave stats
+        function updateWaveStats() {
+            const wave = Math.floor(killedEnemies / WAVE_INTERVAL);
+            ENEMY_SPEED = 0.5 + wave * 0.1;
+            ENEMY_DAMAGE = 10 + wave * 2;
+        }
+
+        // Update
+        function update() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+            // Ground
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, HEIGHT - 20, WIDTH, 20);
+
+            // Platforms
+            platforms.forEach(plat => drawPlatform(plat.x, plat.y, plat.width, plat.height));
+            platformTimer++;
+            if (platformTimer >= PLATFORM_REFRESH_INTERVAL) {
+                spawnPlatforms();
+                platformTimer = 0;
+            }
+
+            // Player movement
+            if (player.pauseTimer > 0) {
+                player.pauseTimer--;
+                player.vx = 0;
+            } else {
+                let defendSpeedMod = player.defending ? 0.5 : 1;
+                player.moveSpeed = BASE_MOVE_SPEED + (player.shoeCount * SHOES_SPEED_BOOST);
+                if (keys['A']) {
+                    player.vx = -player.moveSpeed * defendSpeedMod;
+                    player.direction = 'left';
+                } else if (keys['D']) {
+                    player.vx = player.moveSpeed * defendSpeedMod;
+                    player.direction = 'right';
+                } else {
+                    player.vx = 0;
+                }
+            }
+
+            if (keys['W'] && !player.jumping) {
+                player.vy = JUMP_POWER;
+                player.jumping = true;
+            }
+
+            if (keys['S']) {
+                player.sliding = true;
+                player.height = 25;
+                // Slide attack
+                enemies.forEach((enemy, i) => {
+                    if (distance(player, enemy) < 50) {
+                        enemy.stunTimer = STUN_TIME;
+                    }
+                });
+                bosses.forEach((boss, i) => {
+                    if (distance(player, boss) < 50) {
+                        boss.frozenTimer = STUN_TIME;
+                    }
+                });
+            } else {
+                player.sliding = false;
+                player.height = 50;
+            }
+
+            // Gravity and flying
+            if (player.flying) {
+                player.vy = -GRAVITY;
+                player.flyTimer--;
+                if (player.flyTimer <= 0) player.flying = false;
+            } else {
+                player.vy += GRAVITY;
+            }
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // Platform collision
+            player.onPlatform = false;
+            platforms.forEach(plat => {
+                if (player.y + player.height <= plat.y + player.vy && 
+                    player.y + player.height + player.vy >= plat.y &&
+                    player.x + player.width > plat.x && player.x < plat.x + plat.width) {
+                    player.y = plat.y - player.height;
+                    player.vy = 0;
+                    player.jumping = false;
+                    player.onPlatform = true;
+                }
+            });
+
+            // Ground
+            if (player.y + player.height > HEIGHT - 20) {
+                player.y = HEIGHT - 20 - player.height;
+                player.vy = 0;
+                player.jumping = false;
+            }
+
+            // Boundaries
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > WIDTH) player.x = WIDTH - player.width;
+
+            // Attack
+            player.attackCooldownMax = player.swordCount > 0 ? SWORD_ATTACK_COOLDOWN : BASE_ATTACK_COOLDOWN;
+            player.attackRange = AOE_RANGE + (player.swordCount > 2 ? 20 * (player.swordCount - 2) : 0);
+            if (keys['J'] && player.attackCooldown <= 0) {
+                player.attacking = true;
+                player.attackCooldown = player.attackCooldownMax;
+
+                enemies.forEach((enemy, i) => {
+                    if (distance(player, enemy) < player.attackRange) {
+                        enemy.hp -= player.swordCount > 0 ? SWORD_DAMAGE : ATTACK_DAMAGE;
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(i, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+
+                bosses.forEach((boss, i) => {
+                    if (distance(player, boss) < player.attackRange * 1.5) {
+                        if (boss.invincibleTimer <= 0 || boss.type !== 'white') {
+                            boss.hp -= player.swordCount > 0 ? SWORD_DAMAGE * 1.5 : ATTACK_DAMAGE;
+                        }
+                        if (boss.hp <= 0) {
+                            bosses.splice(i, 1);
+                            killedEnemies += 5;
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+            } else {
+                player.attacking = false;
+            }
+            if (player.attackCooldown > 0) player.attackCooldown--;
+
+            if (player.attacking) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.attackRange, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Heal
+            if (keys['H']) {
+                player.hp = Math.min(player.maxHP, player.hp + HEAL_AMOUNT);
+                keys['H'] = false;
+            }
+
+            // Defend
+            player.defending = !!keys['F'];
+            if (player.defending) {
+                ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
+                ctx.fillRect(player.x - 10, player.y - 10, player.width + 20, player.height + 20);
+            }
+
+            // Throw dart
+            if (keys['N'] && !player.throwingDart) {
+                darts.push({
+                    x: player.x + (player.direction === 'right' ? player.width : 0),
+                    y: player.y + 20,
+                    vx: player.direction === 'right' ? 10 : -10,
+                    direction: player.direction
+                });
+                player.throwingDart = true;
+            } else if (!keys['N']) {
+                player.throwingDart = false;
+            }
+
+            // Rasengan
+            if (player.hasRasengan && keys['K'] && player.rasenganCooldown <= 0) {
+                rasengans.push({
+                    x: player.x + (player.direction === 'right' ? player.width : 0),
+                    y: player.y + 20,
+                    vx: player.direction === 'right' ? 8 : -8,
+                    exploded: false
+                });
+                player.rasenganCooldown = RASENGAN_COOLDOWN;
+            }
+            if (player.rasenganCooldown > 0) player.rasenganCooldown--;
+
+            // Barrier
+            if (player.hasBarrier && keys['L'] && player.barrierCooldown <= 0) {
+                bosses.forEach(boss => boss.frozenTimer = BARRIER_DURATION);
+                player.barrierCooldown = BARRIER_COOLDOWN;
+            }
+            if (player.barrierCooldown > 0) player.barrierCooldown--;
+
+            // Kill magic
+            if (player.hasKillMagic && keys['M'] && player.killMagicTimer <= 0) {
+                player.killMagicTimer = KILL_MAGIC_DURATION;
+            }
+            if (player.killMagicTimer > 0) player.killMagicTimer--;
+
+            // Fly magic
+            if (player.hasFlyMagic && keys['R'] && player.flyTimer <= 0) {
+                player.flying = true;
+                player.flyTimer = FLY_MAGIC_DURATION;
+            }
+            if (player.flyTimer > 0) player.flyTimer--;
+
+            // Summon magic
+            if (player.hasSummonMagic && keys['O'] && player.summonCooldown <= 0) {
+                const numSoldiers = Math.floor(Math.random() * 11) + 10; // 10-20
+                for (let s = 0; s < numSoldiers; s++) {
+                    soldiers.push({
+                        x: Math.random() * WIDTH,
+                        y: HEIGHT - 70,
+                        width: 20,
+                        height: 50,
+                        vx: 0,
+                        vy: 0,
+                        hp: 20,
+                        direction: 'right',
+                        color: '#fff',
+                        lifetime: SUMMON_DURATION
+                    });
+                }
+                player.summonCooldown = SUMMON_COOLDOWN;
+                keys['O'] = false;
+            }
+            if (player.summonCooldown > 0) player.summonCooldown--;
+
+            // Pistol shoot
+            if (player.pistolCount > 0 && keys['P'] && player.pistolCooldown <= 0) {
+                if (player.pistolCount >= 2) {
+                    nuclears.push({
+                        x: player.x + player.width / 2,
+                        y: player.y + player.height / 2,
+                        lifetime: NUCLEAR_DURATION
+                    });
+                    player.pistolCooldown = NUCLEAR_COOLDOWN;
+                } else {
+                    for (let dir = 0; dir < 5; dir++) {
+                        const angle = dir * (Math.PI * 2 / 5);
+                        bullets.push({
+                            x: player.x + player.width / 2,
+                            y: player.y + player.height / 2,
+                            vx: Math.cos(angle) * 10,
+                            vy: Math.sin(angle) * 10
+                        });
+                    }
+                    player.pistolCooldown = PISTOL_COOLDOWN;
+                }
+            }
+            if (player.pistolCooldown > 0) player.pistolCooldown--;
+
+            // Pickup and dual sword skill
+            let picked = false;
+            if (keys['E'] && player.pickupCooldown <= 0) {
+                powerups.forEach((powerup, i) => {
+                    if (!powerup.picked && collides(player, powerup)) {
+                        picked = true;
+                        if (powerup.type === 'sword') {
+                            if (player.swordCount < 2) player.swordCount++;
+                            else player.attackRange += 20;
+                        } else if (powerup.type === 'heart') {
+                            if (Math.random() < 0.5) player.maxHP += HEART_BOOST;
+                            else player.hp = player.maxHP;
+                        } else if (powerup.type === 'rasengan' && !player.hasRasengan) player.hasRasengan = true;
+                        else if (powerup.type === 'barrier' && !player.hasBarrier) player.hasBarrier = true;
+                        else if (powerup.type === 'shoes' && player.shoeCount < MAX_SHOES) {
+                            player.shoeCount++;
+                            player.moveSpeed += SHOES_SPEED_BOOST;
+                        } else if (powerup.type === 'killmagic' && !player.hasKillMagic) player.hasKillMagic = true;
+                        else if (powerup.type === 'flymagic' && !player.hasFlyMagic) player.hasFlyMagic = true;
+                        else if (powerup.type === 'summon' && !player.hasSummonMagic) player.hasSummonMagic = true;
+                        else if (powerup.type === 'pistol') {
+                            if (player.pistolCount < 2) player.pistolCount++;
+                        }
+                        powerups.splice(i, 1);
+                    }
+                });
+                if (!picked) {
+                    if (player.swordCount >= 2) {
+                        // Dual sword skill
+                        swordWaves.push({
+                            x: player.x + (player.direction === 'right' ? player.width : 0),
+                            y: player.y + player.height / 2,
+                            vx: player.direction === 'right' ? 10 : -10,
+                            lifetime: 60
+                        });
+                    } else if (player.swordCount > 0) {
+                        // Drop sword
+                        player.swordCount--;
+                        powerups.push({
+                            x: player.x + (player.direction === 'right' ? 20 : -20),
+                            y: HEIGHT - 30,
+                            width: 40,
+                            height: 20,
+                            type: 'sword',
+                            picked: false
+                        });
+                    }
+                }
+                player.pickupCooldown = 30;
+            }
+            if (player.pickupCooldown > 0) player.pickupCooldown--;
+            if (!keys['E']) player.pickupCooldown = 0;
+
+            // Draw player
+            if (player.invincibleTimer % 10 < 5) {
+                drawStickman(player.x + player.width / 2, player.y + player.height / 2 - 15, player.direction, '#fff');
+            }
+            if (player.invincibleTimer > 0) player.invincibleTimer--;
+
+            // Draw swords
+            if (player.swordCount >= 1 && player.invincibleTimer % 10 < 5) {
+                drawSword(player.x + (player.direction === 'right' ? 15 : -35), player.y + 10);
+            }
+            if (player.swordCount >= 2 && player.invincibleTimer % 10 < 5) {
+                drawSword(player.x + (player.direction === 'right' ? -35 : 15), player.y + 10);
+            }
+
+            // Draw pistols
+            if (player.pistolCount >= 1 && player.invincibleTimer % 10 < 5) {
+                drawPistol(player.x + (player.direction === 'right' ? 15 : -35), player.y + 10);
+            }
+            if (player.pistolCount >= 2 && player.invincibleTimer % 10 < 5) {
+                drawPistol(player.x + (player.direction === 'right' ? -35 : 15), player.y + 10);
+            }
+
+            // Draw powerups
+            powerups.forEach(powerup => {
+                if (powerup.type === 'sword') drawSword(powerup.x, powerup.y);
+                else if (powerup.type === 'heart') drawHeart(powerup.x + 20, powerup.y - 10);
+                else if (powerup.type === 'rasengan') drawRasenganPowerup(powerup.x, powerup.y);
+                else if (powerup.type === 'barrier') drawBarrierPowerup(powerup.x, powerup.y);
+                else if (powerup.type === 'shoes') drawShoes(powerup.x, powerup.y);
+                else if (powerup.type === 'killmagic') drawKillMagicPowerup(powerup.x, powerup.y);
+                else if (powerup.type === 'flymagic') drawFlyMagicPowerup(powerup.x, powerup.y);
+                else if (powerup.type === 'summon') drawSummonPowerup(powerup.x, powerup.y);
+                else if (powerup.type === 'pistol') drawPistol(powerup.x, powerup.y);
+            });
+
+            // Spawn enemies
+            if (enemies.length < 1) spawnEnemy();
+            if (Math.random() < 0.02 && enemies.length < 5) spawnEnemy();
+
+            // Spawn boss
+            bossSpawnTimer++;
+            if (bossSpawnTimer >= BOSS_SPAWN_INTERVAL && bosses.length < 5) {
+                spawnBoss();
+                bossSpawnTimer = 0;
+            }
+
+            // Update enemies
+            enemies.forEach((enemy, i) => {
+                if (enemy.stunTimer > 0) {
+                    enemy.stunTimer--;
+                    enemy.vx = 0;
+                    enemy.vy = 0;
+                } else {
+                    // Movement
+                    if (player.x > enemy.x) enemy.vx = ENEMY_SPEED;
+                    else if (player.x < enemy.x) enemy.vx = -ENEMY_SPEED;
+                    if (player.y < enemy.y) enemy.vy = -ENEMY_SPEED;
+                    else if (player.y > enemy.y) enemy.vy = ENEMY_SPEED;
+                    else enemy.vy = 0;
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+                    enemy.direction = enemy.vx > 0 ? 'right' : 'left';
+                }
+
+                // Attack
+                if (distance(enemy, player) < 40) {
+                    enemy.attacking = true;
+                    if (player.invincibleTimer <= 0) {
+                        let dmg = ENEMY_DAMAGE;
+                        if (player.defending) dmg *= 0.5;
+                        player.hp -= dmg;
+                        player.invincibleTimer = INVINCIBLE_TIME;
+                    }
+                } else {
+                    enemy.attacking = false;
+                }
+
+                if (enemy.hp <= 0) {
+                    killedEnemies++;
+                    enemies.splice(i, 1);
+                    updateWaveStats();
+                    if (killedEnemies % 10 === 0) {
+                        if (Math.random() < 0.5) spawnReward();
+                        else spawnBoss();
+                    }
+                }
+
+                drawStickman(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2 - 15, enemy.direction, enemy.color);
+            });
+
+            // Update soldiers
+            soldiers.forEach((soldier, i) => {
+                soldier.lifetime--;
+                if (soldier.lifetime <= 0) {
+                    soldiers.splice(i, 1);
+                    return;
+                }
+                // Find nearest enemy or boss
+                let target = null;
+                let minDist = Infinity;
+                enemies.forEach(enemy => {
+                    let d = distance(soldier, enemy);
+                    if (d < minDist) {
+                        minDist = d;
+                        target = enemy;
+                    }
+                });
+                bosses.forEach(boss => {
+                    let d = distance(soldier, boss);
+                    if (d < minDist) {
+                        minDist = d;
+                        target = boss;
+                    }
+                });
+                if (target) {
+                    soldier.vx = (target.x > soldier.x ? 2 : -2);
+                    soldier.vy = (target.y > soldier.y ? 2 : -2);
+                    soldier.direction = soldier.vx > 0 ? 'right' : 'left';
+                    soldier.x += soldier.vx;
+                    soldier.y += soldier.vy;
+                    if (distance(soldier, target) < 30) {
+                        target.hp -= SUMMON_DAMAGE;
+                        if (target.hp <= 0) {
+                            if (enemies.includes(target)) {
+                                killedEnemies++;
+                                enemies.splice(enemies.indexOf(target), 1);
+                                updateWaveStats();
+                                if (killedEnemies % 10 === 0) {
+                                    if (Math.random() < 0.5) spawnReward();
+                                    else spawnBoss();
+                                }
+                            } else if (bosses.includes(target)) {
+                                bosses.splice(bosses.indexOf(target), 1);
+                                killedEnemies += 5;
+                                updateWaveStats();
+                                if (killedEnemies % 10 === 0) {
+                                    if (Math.random() < 0.5) spawnReward();
+                                    else spawnBoss();
+                                }
+                            }
+                        }
+                    }
+                }
+                drawStickman(soldier.x + soldier.width / 2, soldier.y + soldier.height / 2 - 15, soldier.direction, soldier.color);
+            });
+
+            // Update bosses
+            bosses.forEach((boss, i) => {
+                if (boss.frozenTimer > 0) {
+                    boss.frozenTimer--;
+                    boss.vx = 0;
+                    boss.vy = 0;
+                } else {
+                    // Movement
+                    boss.vx = boss.speed * (player.x > boss.x ? 1 : -1);
+                    boss.direction = boss.vx > 0 ? 'right' : 'left';
+                    boss.x += boss.vx;
+                    if (boss.flying) {
+                        boss.y = PURPLE_BOSS_FLY_HEIGHT;
+                    } else {
+                        boss.vy += GRAVITY;
+                        boss.y += boss.vy;
+                        if (boss.y + boss.height > HEIGHT - 20) {
+                            boss.y = HEIGHT - 20 - boss.height;
+                            boss.vy = 0;
+                            if (boss.type === 'purple') {
+                                // Explode on fall
+                                enemies.forEach((enemy, j) => {
+                                    if (distance(boss, enemy) < 50) {
+                                        enemy.hp -= PURPLE_BOSS_BOMB_DAMAGE;
+                                        if (enemy.hp <= 0) {
+                                            killedEnemies++;
+                                            enemies.splice(j, 1);
+                                            updateWaveStats();
+                                            if (killedEnemies % 10 === 0) {
+                                                if (Math.random() < 0.5) spawnReward();
+                                                else spawnBoss();
+                                            }
+                                        }
+                                    }
+                                });
+                                if (distance(boss, player) < 50 && player.invincibleTimer <= 0) {
+                                    let dmg = PURPLE_BOSS_BOMB_DAMAGE;
+                                    if (player.defending) dmg *= 0.5;
+                                    player.hp -= dmg;
+                                    player.invincibleTimer = INVINCIBLE_TIME;
+                                }
+                                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                                ctx.beginPath();
+                                ctx.arc(boss.x + boss.width / 2, boss.y + boss.height, 50, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                        }
+                    }
+
+                    // Type specific
+                    if (boss.type === 'green') {
+                        if (boss.magicCooldown <= 0) {
+                            if (Math.random() < 0.5) {
+                                enemies.forEach(enemy => enemy.hp = Math.min(ENEMY_HP, enemy.hp + 20));
+                            } else {
+                                for (let m = 0; m < 20; m++) {
+                                    bossProjectiles.push({
+                                        x: boss.x + (boss.direction === 'right' ? boss.width : 0),
+                                        y: boss.y + 35,
+                                        vx: boss.direction === 'right' ? 5 + Math.random() * 2 - 1 : -5 + Math.random() * 2 - 1,
+                                        type: 'magic'
+                                    });
+                                }
+                            }
+                            boss.magicCooldown = BOSS_MAGIC_COOLDOWN;
+                        } else boss.magicCooldown--;
+                    } else if (boss.type === 'blue') {
+                        if (boss.dashCooldown <= 0 && distance(boss, player) < 200) {
+                            boss.dashing = true;
+                            boss.vx = (boss.direction === 'right' ? BLUE_BOSS_DASH_SPEED : -BLUE_BOSS_DASH_SPEED);
+                            boss.dashCooldown = BLUE_BOSS_DASH_COOLDOWN;
+                        } else boss.dashCooldown--;
+                    } else if (boss.type === 'yellow') {
+                        if (boss.fireCooldown <= 0) {
+                            flames.push({
+                                x: Math.random() * WIDTH,
+                                y: HEIGHT - 20,
+                                lifetime: 120,
+                                type: 'yellow',
+                                color: '#f00'
+                            });
+                            boss.fireCooldown = YELLOW_BOSS_FIRE_COOLDOWN;
+                        } else boss.fireCooldown--;
+                    } else if (boss.type === 'black') {
+                        if (boss.colorTimer <= 0) {
+                            boss.color = boss.color === '#000' ? '#fff' : '#000';
+                            boss.colorTimer = BLACK_BOSS_COLOR_CHANGE;
+                        } else boss.colorTimer--;
+                        if (boss.jumpCooldown <= 0 && (player.attacking || darts.length > 0 || rasengans.length > 0 || swordWaves.length > 0)) {
+                            boss.vy = JUMP_POWER;
+                            boss.jumpCooldown = BLACK_BOSS_COLOR_CHANGE;
+                        } else boss.jumpCooldown--;
+                    } else if (boss.type === 'magician') {
+                        if (!boss.summoned) {
+                            for (let s = 0; s < MAGICIAN_SUMMON_COUNT; s++) {
+                                spawnBoss('black');
+                            }
+                            boss.summoned = true;
+                        }
+                    } else if (boss.type === 'purple') {
+                        if (boss.fallTimer > 0) boss.fallTimer--;
+                        else boss.flying = false;
+                        if (boss.bombCooldown <= 0) {
+                            for (let b = 0; b < 10; b++) {
+                                bombs.push({
+                                    x: boss.x + Math.random() * 50 - 25,
+                                    y: boss.y + boss.height,
+                                    vy: 5 + Math.random() * 2
+                                });
+                            }
+                            boss.bombCooldown = PURPLE_BOSS_BOMB_INTERVAL;
+                        } else boss.bombCooldown--;
+                    } else if (boss.type === 'white') {
+                        if (boss.invincibleTimer > 0) boss.invincibleTimer--;
+                        if (boss.lifetime > 0) boss.lifetime--;
+                        else bosses.splice(i, 1);
+                        if (boss.pauseCooldown <= 0) {
+                            player.pauseTimer = WHITE_BOSS_PAUSE_DURATION;
+                            boss.pauseCooldown = WHITE_BOSS_PAUSE_INTERVAL;
+                        } else boss.pauseCooldown--;
+                        // Use player skills except fly
+                        if (boss.attackCooldown <= 0) {
+                            if (distance(boss, player) < AOE_RANGE) {
+                                if (player.invincibleTimer <= 0) {
+                                    let dmg = WHITE_BOSS_DAMAGE;
+                                    if (player.defending) dmg *= 0.5;
+                                    player.hp -= dmg;
+                                    player.invincibleTimer = INVINCIBLE_TIME;
+                                }
+                            }
+                            boss.attackCooldown = BASE_ATTACK_COOLDOWN;
+                        } else boss.attackCooldown--;
+                        if (boss.dartCooldown <= 0) {
+                            let proj = {
+                                x: boss.x + (boss.direction === 'right' ? boss.width : 0),
+                                y: boss.y + 35,
+                                vx: boss.direction === 'right' ? 10 : -10,
+                                type: 'dart',
+                                direction: boss.direction,
+                                fromWhite: true
+                            };
+                            bossProjectiles.push(proj);
+                            boss.dartCooldown = 60;
+                        } else boss.dartCooldown--;
+                        if (boss.rasenganCooldown <= 0) {
+                            let proj = {
+                                x: boss.x + (boss.direction === 'right' ? boss.width : 0),
+                                y: boss.y + 35,
+                                vx: boss.direction === 'right' ? 8 : -8,
+                                type: 'rasengan',
+                                exploded: false,
+                                fromWhite: true
+                            };
+                            bossProjectiles.push(proj);
+                            boss.rasenganCooldown = RASENGAN_COOLDOWN;
+                        } else boss.rasenganCooldown--;
+                        if (boss.killMagicTimer <= 0) {
+                            boss.killMagicTimer = KILL_MAGIC_DURATION;
+                        }
+                        if (boss.killMagicTimer > 0) {
+                            boss.killMagicTimer--;
+                            if (boss.killMagicTimer % 30 === 0) {
+                                flames.push({
+                                    x: boss.x + Math.random() * 100 - 50,
+                                    y: boss.y + Math.random() * 100 - 50,
+                                    lifetime: 60,
+                                    type: 'kill',
+                                    color: '#f00'
+                                });
+                            }
+                        }
+                    } else if (boss.type === 'orange') {
+                        if (!boss.paused) {
+                            enemies.forEach(enemy => {
+                                enemy.stunTimer = ORANGE_BOSS_PAUSE_DURATION;
+                            });
+                            boss.paused = true;
+                            boss.spawnWhiteTimer = ORANGE_BOSS_SPAWN_DELAY;
+                        }
+                        if (boss.spawnWhiteTimer > 0) {
+                            boss.spawnWhiteTimer--;
+                            if (boss.spawnWhiteTimer === 0) {
+                                spawnBoss('white');
+                            }
+                        }
+                    }
+
+                    // Attack
+                    if (distance(boss, player) < 60) {
+                        if (player.invincibleTimer <= 0) {
+                            let dmg = boss.dashing ? BLUE_BOSS_DASH_DAMAGE : boss.damage;
+                            if (player.defending) dmg *= 0.5;
+                            player.hp -= dmg;
+                            player.invincibleTimer = INVINCIBLE_TIME;
+                        }
+                    }
+                }
+
+                if (boss.hp <= 0) {
+                    bosses.splice(i, 1);
+                    killedEnemies += 5;
+                    updateWaveStats();
+                    if (killedEnemies % 10 === 0) {
+                        if (Math.random() < 0.5) spawnReward();
+                        else spawnBoss();
+                    }
+                }
+
+                drawStickman(boss.x + boss.width / 2, boss.y + boss.height / 2 - 20, boss.direction, boss.color, 1.5, boss.hat);
+            });
+
+            // Update bombs
+            bombs.forEach((bomb, i) => {
+                bomb.y += bomb.vy;
+                if (bomb.y + 10 > HEIGHT - 20) {
+                    // Explode
+                    enemies.forEach((enemy, j) => {
+                        if (distance(bomb, enemy) < 50) {
+                            enemy.hp -= PURPLE_BOSS_BOMB_DAMAGE;
+                            if (enemy.hp <= 0) {
+                                killedEnemies++;
+                                enemies.splice(j, 1);
+                                updateWaveStats();
+                                if (killedEnemies % 10 === 0) {
+                                    if (Math.random() < 0.5) spawnReward();
+                                    else spawnBoss();
+                                }
+                            }
+                        }
+                    });
+                    if (distance(bomb, player) < 50 && player.invincibleTimer <= 0) {
+                        let dmg = PURPLE_BOSS_BOMB_DAMAGE;
+                        if (player.defending) dmg *= 0.5;
+                        player.hp -= dmg;
+                        player.invincibleTimer = INVINCIBLE_TIME;
+                    }
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    ctx.beginPath();
+                    ctx.arc(bomb.x, bomb.y, 50, 0, Math.PI * 2);
+                    ctx.fill();
+                    bombs.splice(i, 1);
+                } else {
+                    drawBomb(bomb.x, bomb.y);
+                }
+            });
+
+            // Update bullets
+            bullets.forEach((bullet, i) => {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                enemies.forEach((enemy, j) => {
+                    if (distance(bullet, enemy) < 10) {
+                        enemy.hp -= BULLET_DAMAGE;
+                        bullets.splice(i, 1);
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (distance(bullet, boss) < 10) {
+                        boss.hp -= BULLET_DAMAGE;
+                        bullets.splice(i, 1);
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                if (bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) bullets.splice(i, 1);
+                drawBullet(bullet.x, bullet.y);
+            });
+
+            // Update nuclears
+            nuclears.forEach((nuc, i) => {
+                nuc.lifetime--;
+                if (nuc.lifetime <= 0) nuclears.splice(i, 1);
+                enemies.forEach((enemy, j) => {
+                    if (distance(nuc, enemy) < 50) {
+                        enemy.hp -= NUCLEAR_DAMAGE;
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (distance(nuc, boss) < 50) {
+                        boss.hp -= NUCLEAR_DAMAGE;
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                drawNuclear(nuc.x, nuc.y);
+            });
+
+            // Update darts (player darts damage enemies/bosses)
+            darts.forEach((dart, i) => {
+                dart.x += dart.vx;
+                enemies.forEach((enemy, j) => {
+                    if (collides({x: dart.x, y: dart.y, width: 10, height: 10}, enemy)) {
+                        enemy.hp -= DART_DAMAGE;
+                        darts.splice(i, 1);
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (collides({x: dart.x, y: dart.y, width: 10, height: 10}, boss)) {
+                        if (boss.invincibleTimer <= 0 || boss.type !== 'white') {
+                            boss.hp -= DART_DAMAGE;
+                        }
+                        darts.splice(i, 1);
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                if (dart.x < 0 || dart.x > WIDTH) darts.splice(i, 1);
+                drawDart(dart.x, dart.y, dart.direction);
+            });
+
+            // Update rasengans (player)
+            rasengans.forEach((ras, i) => {
+                ras.x += ras.vx;
+                let hit = false;
+                enemies.forEach((enemy, j) => {
+                    if (collides({x: ras.x, y: ras.y, width: 40, height: 40}, enemy) && !ras.exploded) {
+                        hit = true;
+                        enemy.hp -= RASENGAN_DAMAGE;
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (collides({x: ras.x, y: ras.y, width: 40, height: 40}, boss) && !ras.exploded) {
+                        hit = true;
+                        if (boss.invincibleTimer <= 0 || boss.type !== 'white') {
+                            boss.hp -= RASENGAN_DAMAGE;
+                        }
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                if (hit) {
+                    ras.exploded = true;
+                    // Explosion
+                    enemies.forEach((enemy, j) => {
+                        if (distance(ras, enemy) < 50) {
+                            enemy.hp -= RASENGAN_EXPLOSION_DAMAGE;
+                            if (enemy.hp <= 0) {
+                                killedEnemies++;
+                                enemies.splice(j, 1);
+                                updateWaveStats();
+                                if (killedEnemies % 10 === 0) {
+                                    if (Math.random() < 0.5) spawnReward();
+                                    else spawnBoss();
+                                }
+                            }
+                        }
+                    });
+                    bosses.forEach((boss, j) => {
+                        if (distance(ras, boss) < 50) {
+                            if (boss.invincibleTimer <= 0 || boss.type !== 'white') {
+                                boss.hp -= RASENGAN_EXPLOSION_DAMAGE;
+                            }
+                            if (boss.hp <= 0) {
+                                bosses.splice(j, 1);
+                            }
+                        }
+                    });
+                }
+                if (ras.exploded) {
+                    ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+                    ctx.beginPath();
+                    ctx.arc(ras.x, ras.y, 50, 0, Math.PI * 2);
+                    ctx.fill();
+                    ras.lifetime = (ras.lifetime || 30) - 1;
+                    if (ras.lifetime <= 0) rasengans.splice(i, 1);
+                } else if (ras.x < 0 || ras.x > WIDTH) rasengans.splice(i, 1);
+                else drawRasengan(ras.x, ras.y);
+            });
+
+            // Update flames
+            flames.forEach((flame, i) => {
+                flame.lifetime--;
+                if (flame.lifetime <= 0) flames.splice(i, 1);
+                enemies.forEach((enemy, j) => {
+                    if (distance(flame, enemy) < 30) {
+                        enemy.hp -= YELLOW_BOSS_FIRE_DAMAGE;
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (distance(flame, boss) < 30) {
+                        boss.hp -= YELLOW_BOSS_FIRE_DAMAGE;
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                if (distance(flame, player) < 30 && player.invincibleTimer <= 0) {
+                    let dmg = flame.type === 'yellow' ? YELLOW_BOSS_FIRE_DAMAGE : 5;
+                    if (player.defending) dmg *= 0.5;
+                    player.hp -= dmg;
+                    player.invincibleTimer = INVINCIBLE_TIME;
+                }
+                drawFlame(flame.x, flame.y, flame.color);
+            });
+
+            // Update sword waves
+            swordWaves.forEach((wave, i) => {
+                wave.x += wave.vx;
+                wave.lifetime--;
+                if (wave.lifetime <= 0 || wave.x < 0 || wave.x > WIDTH) swordWaves.splice(i, 1);
+                enemies.forEach((enemy, j) => {
+                    if (distance(wave, enemy) < 50) {
+                        enemy.hp -= DUAL_SWORD_DAMAGE;
+                        if (enemy.hp <= 0) {
+                            killedEnemies++;
+                            enemies.splice(j, 1);
+                            updateWaveStats();
+                            if (killedEnemies % 10 === 0) {
+                                if (Math.random() < 0.5) spawnReward();
+                                else spawnBoss();
+                            }
+                        }
+                    }
+                });
+                bosses.forEach((boss, j) => {
+                    if (distance(wave, boss) < 50) {
+                        boss.hp -= DUAL_SWORD_DAMAGE;
+                        if (boss.hp <= 0) {
+                            bosses.splice(j, 1);
+                        }
+                    }
+                });
+                drawSwordWave(wave.x, wave.y);
+            });
+
+            // Update boss projectiles
+            bossProjectiles.forEach((proj, i) => {
+                proj.x += proj.vx;
+                if (collides(proj, player) && player.invincibleTimer <= 0) {
+                    let dmg;
+                    if (proj.fromWhite) dmg = 5;
+                    else dmg = proj.type === 'dart' ? DART_DAMAGE : (proj.type === 'magic' ? GREEN_BOSS_MAGIC_DAMAGE : (proj.type === 'rasengan' ? RASENGAN_DAMAGE : 0));
+                    if (player.defending) dmg *= 0.5;
+                    player.hp -= dmg;
+                    player.invincibleTimer = INVINCIBLE_TIME;
+                    bossProjectiles.splice(i, 1);
+                    if (proj.type === 'rasengan') {
+                        // Explosion on player
+                        enemies.forEach((enemy, j) => {
+                            if (distance(proj, enemy) < 50) {
+                                enemy.hp -= RASENGAN_EXPLOSION_DAMAGE;
+                                if (enemy.hp <= 0) {
+                                    killedEnemies++;
+                                    enemies.splice(j, 1);
+                                    updateWaveStats();
+                                    if (killedEnemies % 10 === 0) {
+                                        if (Math.random() < 0.5) spawnReward();
+                                        else spawnBoss();
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                if (proj.x < 0 || proj.x > WIDTH) bossProjectiles.splice(i, 1);
+                if (proj.type === 'dart') drawDart(proj.x, proj.y, proj.direction);
+                else if (proj.type === 'rasengan') drawRasengan(proj.x, proj.y);
+                else drawBossMagic(proj.x, proj.y);
+            });
+
+            // Update HUD
+            document.getElementById('playerHP').textContent = Math.max(0, Math.floor(player.hp));
+            document.getElementById('playerMaxHP').textContent = player.maxHP;
+            document.getElementById('killedEnemies').textContent = killedEnemies;
+
+            // Game over
+            if (player.hp <= 0) {
+                ctx.fillStyle = '#fff';
+                ctx.font = '30px Arial';
+                ctx.fillText('Game Over', WIDTH / 2 - 100, HEIGHT / 2);
+                return;
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        spawnPlatforms();
+        spawnEnemy(); // Initial enemy to ensure appearance
+        update();
+    </script>
+</body>
+</html>
